@@ -32,8 +32,13 @@ struct NotesListView: View {
                         } label: {
                             NoteRowView(note: note)
                         }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                delete(note)
+                            } label: {
+                                Label("Excluir", systemImage: "trash")
+                            }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -43,6 +48,19 @@ struct NotesListView: View {
             .searchable(text: $viewModel.searchText)
             .background(Color(.systemGroupedBackground))
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Mais recentes") {
+                            viewModel.sortOption = .newestFirst
+                        }
+                        
+                        Button("Mais antigas") {
+                            viewModel.sortOption = .oldestFirst
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         viewModel.showFavoritesOnly.toggle()
@@ -59,6 +77,15 @@ struct NotesListView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+
+private extension NotesListView {
+    private func delete(_ note: Note) {
+        if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
+            viewModel.delete(at: IndexSet(integer: index))
         }
     }
 }

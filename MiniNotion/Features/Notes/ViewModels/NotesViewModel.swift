@@ -8,6 +8,7 @@ final class NotesViewModel: ObservableObject {
     @Published private(set) var notes: [Note] = []
     @Published private(set) var tags: [Tag] = []
     @Published var showFavoritesOnly: Bool = false
+    @Published var sortOption: NotesSortOption = .newestFirst
 
     private var allNotes: [Note] = []
     
@@ -34,16 +35,22 @@ private extension NotesViewModel {
     
     func setupBindings() {
         
-        Publishers.CombineLatest3($searchText, $selectedTag, $showFavoritesOnly)
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-            .sink { [weak self] (searchText, selectedTag, showFavoritesOnly) in
-                self?.applyFilters(
-                    searchText: searchText,
-                    tag: selectedTag,
-                    favoritesOnly: showFavoritesOnly
-                )
-            }
-            .store(in: &cancellables)
+        Publishers.CombineLatest4(
+            $searchText,
+            $selectedTag,
+            $showFavoritesOnly,
+            $sortOption
+        )
+        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+        .sink { [weak self] (searchText, selectedTag, favoritesOnly, sortOption) in
+            self?.applyFilters(
+                searchText: searchText,
+                tag: selectedTag,
+                favoritesOnly: favoritesOnly,
+                sortOption: sortOption
+            )
+        }
+        .store(in: &cancellables)
     }
     
     func loadInitialData() {
@@ -55,7 +62,8 @@ private extension NotesViewModel {
             applyFilters(
                 searchText: searchText,
                 tag: selectedTag,
-                favoritesOnly: showFavoritesOnly
+                favoritesOnly: showFavoritesOnly,
+                sortOption: sortOption
             )
         } catch {
             print(error)
@@ -66,7 +74,12 @@ private extension NotesViewModel {
 
 private extension NotesViewModel {
     
-    func applyFilters(searchText: String, tag: Tag?, favoritesOnly: Bool) {
+    func applyFilters(
+        searchText: String,
+        tag: Tag?,
+        favoritesOnly: Bool,
+        sortOption: NotesSortOption
+    ) {
         
         var filtered = allNotes
         
@@ -85,6 +98,14 @@ private extension NotesViewModel {
         
         if favoritesOnly {
             filtered = filtered.filter { $0.isFavorite }
+        }
+        
+        switch sortOption {
+        case .newestFirst:
+            filtered.sort { $0.updatedAt > $1.updatedAt }
+            
+        case .oldestFirst:
+            filtered.sort { $0.updatedAt < $1.updatedAt }
         }
         
         self.notes = filtered
@@ -138,6 +159,15 @@ extension NotesViewModel {
         reload()
     }
     
+    func deleteNote(_ note: Note) {
+        do {
+            try store.delete(note)
+            reload()
+        } catch {
+            print("Erro ao deletar:", error)
+        }
+    }
+    
     func toggleTag(_ tag: Tag, for note: Note) {
         var updated = note
         
@@ -163,7 +193,8 @@ private extension NotesViewModel {
             applyFilters(
                 searchText: searchText,
                 tag: selectedTag,
-                favoritesOnly: showFavoritesOnly
+                favoritesOnly: showFavoritesOnly,
+                sortOption: sortOption
             )
         } catch {
             print(error)

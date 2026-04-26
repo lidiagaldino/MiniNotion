@@ -6,11 +6,25 @@ struct NoteEditorView: View {
     
     @State private var note: Note
     @State private var newTagText: String = ""
+    @State private var showDeleteAlert = false
+    @Environment(\.dismiss) private var dismiss
     
     
     init(note: Note, viewModel: NotesViewModel) {
         self._note = State(initialValue: note)
         self.viewModel = viewModel
+    }
+    
+    var suggestedTags: [Tag] {
+        guard !newTagText.isEmpty else { return [] }
+        
+        return viewModel.tags
+            .filter {
+                $0.name.lowercased().contains(newTagText.lowercased())
+            }
+            .filter { suggested in
+                !note.tags.contains { $0.name == suggested.name }
+            }
     }
     
     
@@ -28,7 +42,11 @@ struct NoteEditorView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
                     ForEach(note.tags) { tag in
-                        TagChip(title: tag.name, isSelected: true)
+                        Button {
+                            removeTag(tag)
+                        } label: {
+                            TagChip(title: tag.name, isSelected: true)
+                        }
                     }
                 }
             }
@@ -41,15 +59,49 @@ struct NoteEditorView: View {
                     addTag()
                 }
             }
-            
+            if !suggestedTags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(suggestedTags) { tag in
+                                    Button {
+                                        addExistingTag(tag)
+                                    } label: {
+                                        TagChip(title: tag.name, isSelected: false)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
             Spacer()
         }
         .padding()
         .navigationTitle("Editar Nota")
         .toolbar {
-            Button("Salvar") {
-                save()
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Salvar") {
+                    save()
+                }
             }
+            
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .destructive) {
+                    showDeleteAlert = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
+        .alert("Excluir nota?", isPresented: $showDeleteAlert) {
+            
+            Button("Excluir", role: .destructive) {
+                delete()
+            }
+            
+            Button("Cancelar", role: .cancel) { }
+            
+        } message: {
+            Text("Essa ação não pode ser desfeita.")
         }
     }
 }
@@ -62,18 +114,25 @@ private extension NoteEditorView {
         
         guard !trimmed.isEmpty else { return }
         
-        if note.tags.contains(where: { $0.name.lowercased() == trimmed.lowercased() }) {
-            newTagText = ""
+        if let existing = viewModel.tags.first(where: {
+            $0.name.lowercased() == trimmed.lowercased()
+        }) {
+            addExistingTag(existing)
             return
         }
         
-        let tag = Tag(
-            id: UUID(),
-            name: trimmed
-        )
+        let tag = Tag(id: UUID(), name: trimmed)
         
         note.tags.append(tag)
-        
+        newTagText = ""
+    }
+    
+    func removeTag(_ tag: Tag) {
+        note.tags.removeAll { $0.id == tag.id }
+    }
+    
+    func addExistingTag(_ tag: Tag) {
+        note.tags.append(tag)
         newTagText = ""
     }
 }
@@ -84,4 +143,10 @@ private extension NoteEditorView {
         note.updatedAt = Date()
         viewModel.update(note: note)
     }
+    
+    func delete() {
+        viewModel.deleteNote(note)
+        dismiss()
+    }
+    
 }
